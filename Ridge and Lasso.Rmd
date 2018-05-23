@@ -1,0 +1,225 @@
+---
+title: "Ridge and Lasso regression"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+**GLMNET** is used for ridge and lasso regression
+```{r lib, echo=FALSE}
+library(lars)
+library(glmnet)
+library(ggplot2)
+data(diabetes)
+```
+
+Diabetes is a dataset contain variables related to diabetes
+<br>
+
+Ploting all the graph between X and y.(As X contains 10 variables so loop goes for 1 to 10 for all the variables)
+
+```{r di}
+par(mfrow = c(2,5))
+for(i in 1:10){
+  plot(diabetes$x[,i],diabetes$y, type = 'p' , xlab = names(diabetes$x[i]))
+abline(lm(y ~ x[,i], data = diabetes))
+}
+```
+
+Linear model by lm function.Y as a funtion of x
+```{r lm}
+lin <- lm(y ~ x, data = diabetes)
+summary(lin)
+```
+
+This will show all residuals and Coefficients.<br>
+The values in Coefficients shows that they are highly correlated with the Y. More the number of stars more significant the values is. <br>
+. shows the significant values but lesser than * values.<br>
+Value here of R squared is near to 0.5 that means they are not highly correlated.As predictor jointly explain 51% of observed varience.
+
+```{r plo}
+par(mfrow= c(1,1))
+glm <- glmnet(diabetes$x,diabetes$y, alpha = 1)
+plot.glmnet(glm, xvar = 'norm', label = T)
+```
+
+
+
+**glmnet is used for LASSO and Ridge. Alpha 1 means LASSO and alpha 0 means Ridge.**
+
+
+```{r glm}
+cvg <- cv.glmnet(diabetes$x,diabetes$y, alpha = 1, nlambda = 1000)
+plot.cv.glmnet(cvg)
+```
+
+
+
+
+Cross validation of LASSO with the help of cv.glmnet function.<br>
+Used to get better value of lamdda for better fitting of equation
+
+<br>
+It will show all the values of mean squred error as lambda increases.
+
+
+```{r lam} 
+cvg$lambda.min
+
+fit <- glmnet(diabetes$x,diabetes$y, alpha = 1, lambda = cvg$lambda.min)
+fit$beta
+```
+LASSO regression using lambda value as the minimun value of lambda
+
+<br>
+
+Now try with new lambda with in one standard error
+```{r 1se}
+cvg$lambda.1se
+fit <- glmnet(diabetes$x,diabetes$y, alpha = 1, lambda =  cvg$lambda.1se)
+fit$beta
+
+```
+
+
+ We can observe that with this lambda value few beta values has been changed and few are compresed to zero.But we can observe the differnce
+<br>
+Now only few most significant values are left.this will reduce complexity but meanwhile increases mean sqaure error if we use this model on train data and predict on test data
+<br>
+
+###Linear model by lm function.Y as a funtion of X2
+```{r ols2 e}
+model_ols2 <- lm(diabetes$y ~ diabetes$x2)
+
+summary(model_ols2)
+```
+
+```{r ols ls}
+model_lasso1 <- glmnet(diabetes$x2, diabetes$y)
+```
+glmnet is used for LASSO and Ridge.Alpha 1 means LASSO and alpha 0 means Ridge.
+```{r las rpl}
+plot.glmnet(model_lasso1, xvar = "norm", label = T)
+
+cv_fit1 <- cv.glmnet(diabetes$x2,diabetes$y, alpha = 1, nlambda = 1000)
+plot.cv.glmnet(cv_fit1)
+
+fit1 <- glmnet(diabetes$x2,diabetes$y, alpha = 1, lambda = cv_fit1$lambda.min)
+```
+
+Cross validation of LASSO with the help of cv.glmnet function. <br>
+Used to get better value of lamdda for better fitting of equation
+```{r ols2 x2}
+fit1$beta
+```
+We can observe that with this lambda value few beta values has been changed and few are compresed to zero
+
+
+```{r ol 1se23}
+cv_fit1$lambda.1se
+
+fit <- glmnet(diabetes$x, diabetes$y, alpha = 1, lambda=cv_fit1$lambda.1se)
+fit$beta
+```
+ We can observe that with this lambda value few beta values has been changed and few are compresed to zero.But we can observe the difference
+ <br>
+ Now only few most significant values are left.this will reduce complexity but meanwhile increases mean sqaure error if we use this model on train data and predict on test data
+
+##Biglasso
+
+```{r biglasso}
+library(biglasso)
+
+data(colon)
+
+X <- colon$X
+Y <- colon$y
+
+dim(X)
+X[1:5, 1:5]
+X.bm <- as.big.matrix(X)
+
+str(X.bm)
+
+dim(X.bm)
+X.bm[1:5, 1:5]
+
+fit <- biglasso(X.bm, Y, screen = "SSR-BEDPP")
+
+plot(fit)
+
+cvfit <- cv.biglasso(X.bm , Y, seed = 1234, nfolds = 10, ncores = 4)
+par(mfrow  = c(2,2), mar = c(3.5, 3.5, 3, 1) ,mgp = c(2.5, 0.5, 0))
+
+plot(cvfit, type = "all")
+
+summary(cvfit)
+
+coef(cvfit)[which(coef(cvfit) != 0)]
+
+```
+
+
+##Custom example
+
+```{r cust}
+swiss <- datasets::swiss
+
+
+x <- model.matrix(Fertility ~ . , swiss)[,-1]
+y <- swiss$Fertility
+
+lambda <- 10^seq(10, -2, length = 100)
+par(mfrow = c(1,1))
+plot(lambda)
+
+set.seed(489)
+
+train = sample(1:nrow(x),nrow(x)/2)
+test = (-train)
+ytest = y[test]
+
+swisslm <- lm(Fertility~., data = swiss)
+
+
+a <- coef(swisslm)
+a
+ridge.mod <- glmnet(x, y, alpha = 0, lambda = lambda)
+plot(ridge.mod)
+predict(ridge.mod, s = 0, type = 'coefficients')[1:6,]
+
+
+swisslm <- lm(Fertility~., data = swiss, subset = train)
+
+ridge.mod <- glmnet(x[train,], y[train], alpha = 0, lambda = lambda)
+plot(ridge.mod)
+
+cv.out <- cv.glmnet(x[train,], y[train], alpha = 0)
+plot(cv.out)
+
+
+bestlam <- cv.out$lambda.min
+bestlam
+
+ridge.pred <- predict(ridge.mod, s = bestlam, newx = x[test,])
+
+s.pred <- predict(swisslm, newdata = swiss[test,])
+
+mean((s.pred-ytest)^2)
+
+mean((ridge.pred - ytest)^2)
+
+out = glmnet(x[train,],y[train], alpha = 0)
+predict(ridge.mod, type = "coefficients", s = bestlam)[1:6,]
+
+lasso.mod <- glmnet(x[train,], y[train], alpha = 1, lambda = lambda)
+lasso.pred <- predict(lasso.mod, s = bestlam, newx = x[test,])
+mean((lasso.pred-ytest)^2)
+
+lasso.coef  <- predict(lasso.mod, type = 'coefficients', s = bestlam)[1:6,]
+lasso.coef
+
+
+```
+
